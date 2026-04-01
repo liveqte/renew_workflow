@@ -1,9 +1,10 @@
-name:  gs keep
+name: gs keep
 
 on:
   workflow_dispatch:
   schedule:
     - cron: '26 2 * * 1'
+
 jobs:
   add_time:
     runs-on: ubuntu-latest
@@ -31,17 +32,40 @@ jobs:
         with:
           secrets: ${{ toJSON(secrets) }}
 
+      - name: Cache auth state
+        uses: actions/cache@v4
+        id: cache-auth
+        with:
+          path: screenshots/cookies.json
+          key: auth-state-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}
+          restore-keys: |
+            auth-state-${{ runner.os }}-
+
       - name: Run Time Adder Script 
         run: |
           mkdir -p "$GITHUB_WORKSPACE/.tmp"
           export TMPDIR="$GITHUB_WORKSPACE/.tmp"
           echo "Using TMPDIR=$TMPDIR"
+          
+          if [ "${{ steps.cache-auth.outputs.cache-hit }}" == 'true' ]; then
+            echo "✅ Cookie 缓存命中"
+          else
+            echo "📭 无 Cookie 缓存，首次运行将创建"
+          fi
+          
           python gs-sb.py
-      - name:  Clean wokerflows
+
+      - name: Save auth state cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: screenshots/cookies.json
+          key: auth-state-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}-${{ github.run_id }}
+
+      - name: Clean workflows
         uses: MajorScruffy/delete-old-workflow-runs@v0.3.0
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           repository: ${{ github.repository }}
           older-than-seconds: 3600
-
