@@ -38,9 +38,9 @@ jobs:
           echo "Using TMPDIR=$TMPDIR"
           python gs-sb.py
 
-      - name: Upload error artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots.zip
-          path: screenshots
+      # - name: Upload error artifacts
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: screenshots.zip
+      #     path: screenshots
