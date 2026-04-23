@@ -1,4 +1,4 @@
-name: gs keep
+name: bytenut keep
 
 on:
   workflow_dispatch:
