@@ -61,6 +61,13 @@ jobs:
         with:
           path: screenshots/cookies.json
           key: auth-state-${{ runner.os }}-${{ hashFiles('bytenut-sb.py') }}-${{ github.run_id }}
+          
+      - name: Upload error artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots
 
       - name: Clean workflows
         uses: MajorScruffy/delete-old-workflow-runs@v0.3.0
