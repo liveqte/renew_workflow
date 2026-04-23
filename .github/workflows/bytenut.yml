@@ -3,7 +3,7 @@ name: bytenut keep
 on:
   workflow_dispatch:
   schedule:
-    - cron: '26 2 * * 1'
+    - cron: '10 */2 * * *'
 
 jobs:
   add_time:
