@@ -52,7 +52,8 @@ jobs:
           else
             echo "📭 无 Cookie 缓存，首次运行将创建"
           fi
-          
+          export DISPLAY=:1
+          echo "Using DISPLAY=$DISPLAY"
           python bytenut-sb.py
 
       - name: Save auth state cache
