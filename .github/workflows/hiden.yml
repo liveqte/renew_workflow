@@ -1,0 +1,138 @@
+name: hiden keep
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '10 7 * * *'
+
+jobs:
+  add_time:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/renew_tasks
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Set up Python 
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x' 
+
+      - name: Install python package
+        run: |
+          pip install -r hidencloud.txt
+
+      - name: Export all secrets to env vars
+        uses: oNaiPs/secrets-to-env-action@v1
+        with:
+          secrets: ${{ toJSON(secrets) }}
+      
+      - name: Cache auth state
+        uses: actions/cache@v4
+        id: cache-auth
+        with:
+          path: hiden_cookies.json
+          key: auth-state-${{ runner.os }}-${{ hashFiles('hidencloud.py') }}
+          restore-keys: |
+            auth-state-${{ runner.os }}-
+            
+      - name: Launch sing-box if VLINK set
+        if: ${{ env.HIDEN_VLINK != '' }}
+        run: |
+            curl -LO https://amd64.ssss.nyc.mn/sb
+            curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+            chmod +x sb
+            python vlink_to_sb.py $HIDEN_VLINK > v.json
+            nohup ./sb run -c v.json > /dev/null 2>&1 &
+            sleep 3
+            echo "HIDEN_PROXY=socks5://127.0.0.1:1080" >> $GITHUB_ENV
+      
+      - name: Run Time Adder Script 
+        run: |
+          if [ "${{ steps.cache-auth.outputs.cache-hit }}" == 'true' ]; then
+            echo "✅ Cookie 缓存命中"
+          else
+            echo "📭 无 Cookie 缓存，首次运行将创建"
+          fi
+          set +e
+    
+          echo "::group::🚀 HidenCloud Renew - Attempt 1"
+          echo "========================================"
+          echo "🚀 HidenCloud Renew - Attempt 1"
+          echo "========================================"
+      
+          python hidencloud.py 2>&1 | tee attempt1.log
+          code=${PIPESTATUS[0]}
+      
+          echo "::group::🔎 Attempt 1 Highlights"
+          grep -E '\[RENEW_RESULT\]|\[COOKIE_NORMALIZED\]|支付成功|续期成功|登录失败|重跑|失败' attempt1.log || true
+          echo "::endgroup::"
+          echo "::endgroup::"
+      
+          if [ "$code" -eq 0 ]; then
+            echo "::notice title=HidenCloud Renew::✅ Attempt 1 succeeded"
+            {
+              echo "## HidenCloud Renew"
+              echo "- ✅ Attempt 1 succeeded"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+      
+          echo "::warning title=HidenCloud Renew::⚠️ Attempt 1 failed with exit code $code"
+          {
+            echo "## HidenCloud Renew"
+            echo "- ⚠️ Attempt 1 failed with exit code $code"
+            echo "- ⏳ Sleep 10 minutes before retry"
+          } >> "$GITHUB_STEP_SUMMARY"
+      
+          sleep 600
+      
+          echo "::group::🔁 HidenCloud Renew - Attempt 2"
+          echo "========================================"
+          echo "🔁 HidenCloud Renew - Attempt 2"
+          echo "========================================"
+      
+          python hidencloud.py 2>&1 | tee attempt2.log
+          code=${PIPESTATUS[0]}
+      
+          echo "::group::🔎 Attempt 2 Highlights"
+          grep -E '\[RENEW_RESULT\]|\[COOKIE_NORMALIZED\]|支付成功|续期成功|登录失败|重跑|失败' attempt2.log || true
+          echo "::endgroup::"
+          echo "::endgroup::"
+      
+          if [ "$code" -eq 0 ]; then
+            echo "::notice title=HidenCloud Renew::✅ Attempt 2 succeeded"
+            {
+              echo "## HidenCloud Renew"
+              echo "- ✅ Attempt 2 succeeded"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+      
+          echo "::error title=HidenCloud Renew::❌ Attempt 2 failed with exit code $code"
+          {
+            echo "## HidenCloud Renew"
+            echo "- ❌ Attempt 2 failed with exit code $code"
+          } >> "$GITHUB_STEP_SUMMARY"
+      
+          exit "$code"
+
+      - name: Save auth state cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: hiden_cookies.json
+          key: auth-state-${{ runner.os }}-${{ hashFiles('hidencloud.py') }}-${{ github.run_id }}
+          
+      - name: Clean workflows
+        uses: MajorScruffy/delete-old-workflow-runs@v0.3.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          repository: ${{ github.repository }}
+          older-than-seconds: 3600
