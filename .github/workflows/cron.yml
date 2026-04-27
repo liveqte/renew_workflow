@@ -1,5 +1,6 @@
 name: Random Cron
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["hiden keep"]
     types:
