@@ -1,7 +1,7 @@
 name: Random Cron
 on:
   workflow_run:
-    workflows: ["HidenCloud Auto Renew (Python)"]
+    workflows: ["hiden keep"]
     types:
       - completed
 
