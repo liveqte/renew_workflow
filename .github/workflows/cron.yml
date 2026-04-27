@@ -1,0 +1,41 @@
+name: Random Cron
+on:
+  workflow_run:
+    workflows: ["HidenCloud Auto Renew (Python)"]
+    types:
+      - completed
+
+jobs:
+  repo-sync:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    
+    # 关键修改：赋予工作流写入仓库内容的权限
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        # 默认会使用自带的 GITHUB_TOKEN
+
+      - name: random cron
+        shell: bash
+        run: |
+          # 更新 cron 的分钟为随机值
+          sed -i -E "s/(- cron: ')[0-9]+( [^[:space:]]+ \* \* \*')/\1$(($RANDOM % 59))\2/g" .github/workflows/hiden.yml
+
+          # 配置 Git 身份
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          
+          git add .github/workflows/main.yml
+
+          # 如果没有变化则退出
+          git diff --cached --quiet && exit 0
+
+          git commit -m "chore: random cron update"
+          
+          # 直接推送，不需要额外的 token 配置
+          git push origin HEAD
