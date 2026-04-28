@@ -1,0 +1,24 @@
+name:  install chrome test
+
+on:
+  workflow_dispatch: # 允许在 Actions 页面手动触发此工作流，方便测试
+
+jobs:
+  add_time:
+    runs-on: ubuntu-latest # 在最新的 Ubuntu 环境上运行
+
+    # 授予工作流写入仓库内容的权限
+    permissions:
+      contents: write
+
+    steps:
+      - uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: 144
+      - name: Install xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          echo "Checking Chrome installation..." 
+          which google-chrome
+          google-chrome --version
