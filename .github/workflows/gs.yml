@@ -62,7 +62,14 @@ jobs:
         with:
           path: screenshots/cookies.json
           key: auth-state-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}-${{ github.run_id }}
-
+          
+      - name: Upload error artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots.zip
+          path: screenshots
+          
       - name: Clean workflows
         uses: MajorScruffy/delete-old-workflow-runs@v0.3.0
         env:
