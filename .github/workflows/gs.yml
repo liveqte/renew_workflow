@@ -18,7 +18,16 @@ jobs:
         with:
           repository: ${{ github.repository_owner }}/renew_tasks
           token: ${{ secrets.GH_TOKEN }}
-
+          
+      - name: Cache auth state
+        uses: actions/cache@v4
+        id: cache-auth
+        with:
+          path: screenshots/cookies.json
+          key: auth-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}-${{ github.run_id }}
+          restore-keys: |
+            auth-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}
+            
       - name: Set up Python 
         uses: actions/setup-python@v5
         with:
@@ -32,15 +41,6 @@ jobs:
         uses: oNaiPs/secrets-to-env-action@v1
         with:
           secrets: ${{ toJSON(secrets) }}
-
-      - name: Cache auth state
-        uses: actions/cache@v4
-        id: cache-auth
-        with:
-          path: screenshots/cookies.json
-          key: auth-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}-${{ github.run_id }}
-          restore-keys: |
-            auth-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}-
 
       - name: Run Time Adder Script 
         run: |
