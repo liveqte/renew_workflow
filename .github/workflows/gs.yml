@@ -54,6 +54,7 @@ jobs:
           fi
           
           python gs-sb.py
+          python gsrenew-sb.py
 
       - name: Save auth state cache
         if: always()
