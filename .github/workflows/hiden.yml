@@ -38,9 +38,9 @@ jobs:
         id: cache-auth
         with:
           path: hiden_cookies.json
-          key: auth-state-${{ runner.os }}-${{ hashFiles('hidencloud.py') }}
+          key: auth-state-${{ runner.os }}-${{ hashFiles('hidencloud.py') }}-${{ github.run_id }}
           restore-keys: |
-            auth-state-${{ runner.os }}-
+            auth-state-${{ runner.os }}-${{ hashFiles('hidencloud.py') }}-
             
       - name: Launch sing-box if VLINK set
         if: ${{ env.HIDEN_VLINK != '' }}
@@ -124,11 +124,11 @@ jobs:
           exit "$code"
 
       - name: Save auth state cache
-        if: steps.cache-auth.outputs.cache-hit != 'true' && always()
+        if: always()
         uses: actions/cache/save@v4
         with:
           path: hiden_cookies.json
-          key: auth-state-${{ runner.os }}-${{ hashFiles('hidencloud.py') }}
+          key: auth-state-${{ runner.os }}-${{ hashFiles('hidencloud.py') }}-${{ github.run_id }}
           
       - name: Clean workflows
         uses: MajorScruffy/delete-old-workflow-runs@v0.3.0
