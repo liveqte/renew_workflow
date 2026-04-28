@@ -38,9 +38,9 @@ jobs:
         id: cache-auth
         with:
           path: screenshots/cookies.json
-          key: auth-state-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}
+          key: auth-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}-${{ github.run_id }}
           restore-keys: |
-            auth-state-${{ runner.os }}-
+            auth-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}-
 
       - name: Run Time Adder Script 
         run: |
@@ -58,11 +58,11 @@ jobs:
           python gsrenew-sb.py
 
       - name: Save auth state cache
-        if: steps.cache-auth.outputs.cache-hit != 'true' && always()
+        if:  always()
         uses: actions/cache/save@v4
         with:
           path: screenshots/cookies.json
-          key: auth-state-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}
+          key: auth-state-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}-${{ github.run_id }}
           
           
       - name: Clean workflows
