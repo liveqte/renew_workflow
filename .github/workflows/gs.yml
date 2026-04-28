@@ -24,9 +24,9 @@ jobs:
         id: cache-auth
         with:
           path: screenshots/cookies.json
-          key: auth-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}-${{ github.run_id }}
+          key:  auth-state-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}-${{ github.run_id }}
           restore-keys: |
-            auth-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}
+             auth-state-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}
             
       - name: Set up Python 
         uses: actions/setup-python@v5
