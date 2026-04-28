@@ -38,7 +38,7 @@ jobs:
         id: cache-auth
         with:
           path: screenshots/cookies.json
-          key: auth-state-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}-${{ github.run_id }}
+          key: auth-state-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}
           restore-keys: |
             auth-state-${{ runner.os }}-${{ hashFiles('gs-sb.py') }}-
 
@@ -52,7 +52,6 @@ jobs:
             echo "✅ Cookie 缓存命中"
           else
             echo "📭 无 Cookie 缓存，首次运行将创建"
-            exit 1
           fi
           
           python gs-sb.py
