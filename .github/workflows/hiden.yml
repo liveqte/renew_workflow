@@ -40,7 +40,7 @@ jobs:
           path: hiden_cookies.json
           key: auth-state-${{ runner.os }}-${{ hashFiles('hidencloud.py') }}-${{ github.run_id }}
           restore-keys: |
-            auth-state-${{ runner.os }}-${{ hashFiles('hidencloud.py') }}-
+            auth-state-${{ runner.os }}-${{ hashFiles('hidencloud.py') }}
             
       - name: Launch sing-box if VLINK set
         if: ${{ env.HIDEN_VLINK != '' }}
