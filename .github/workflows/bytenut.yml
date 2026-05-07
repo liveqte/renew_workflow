@@ -6,6 +6,19 @@ on:
     - cron: '0 * * * *'
 
 jobs:
+  pre-init:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Interval Check (Strict 4-day cycle)
+        id: check
+        run: |        
+          HOUR=$(date +%-H) 
+          if (( HOUR % 2 != 0 )); then
+              echo "[$(date)] 当前为单数小时 ($HOUR)，等待 100 秒..."
+              sleep 100
+          else
+              echo "[$(date)] 当前为双数小时 ($HOUR)，跳过等待。"
+          fi
   add_time:
     runs-on: ubuntu-latest
 
