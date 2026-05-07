@@ -9,7 +9,7 @@ jobs:
   pre-init:
     runs-on: ubuntu-latest
     steps:
-      - name: Interval Check (Strict 4-day cycle)
+      - name: wait 100 in Odd hours
         id: check
         run: |        
           HOUR=$(date +%-H) 
