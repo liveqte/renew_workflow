@@ -21,6 +21,7 @@ jobs:
           node-version: '22'
 
       - name: 📦 安装依赖
+        working-directory: ./hnhost-bot
         run: npm install
 
       - name: 💾 获取 Playwright 版本
@@ -40,7 +41,7 @@ jobs:
       
       - name: Launch sing-box if VLINK set
         env:
-          VLINK: ${{ secrets.VLINK }}
+          VLINK: ${{ secrets.HN_VLINK }}
         if: ${{ env.VLINK != '' }}
         run: |
             curl -LO https://amd64.ssss.nyc.mn/sb
@@ -55,8 +56,8 @@ jobs:
           DISCORD_TOKEN:   ${{ secrets.DISCORD_TOKEN }}
           TG_BOT:          ${{ secrets.TG_BOT }}
           GOST_PROXY:      http://127.0.0.1:1080
+        working-directory: ./hnhost-bot
         run: |
-          cd hnhost-bot
           xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" npx playwright test
 
       - name: 📸 上传失败截图
