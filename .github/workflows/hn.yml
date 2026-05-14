@@ -1,0 +1,68 @@
+name: 🎮 hnhost
+on:
+  schedule:
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+jobs:
+  renew:
+    name: 🔄 执行续期
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 📥 拉取代码
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/renew_tasks
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: 🟢 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 📦 安装依赖
+        run: npm install
+
+      - name: 💾 获取 Playwright 版本
+        id: playwright-version
+        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> $GITHUB_OUTPUT
+
+      - name: 📁 缓存 Playwright 浏览器
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+
+      - name: 🌐 安装 Playwright 浏览器
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps
+      
+      - name: Launch sing-box if VLINK set
+        env:
+          VLINK: ${{ secrets.VLINK }}
+        if: ${{ env.VLINK != '' }}
+        run: |
+            curl -LO https://amd64.ssss.nyc.mn/sb
+            curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+            chmod +x sb
+            python vlink_to_sb.py $VLINK > v.json
+            nohup ./sb run -c v.json > /dev/null 2>&1 &
+            sleep 3
+
+      - name: 🚀 运行续期脚本
+        env:
+          DISCORD_TOKEN:   ${{ secrets.DISCORD_TOKEN }}
+          TG_BOT:          ${{ secrets.TG_BOT }}
+          GOST_PROXY:      http://127.0.0.1:1080
+        run: |
+          cd hnhost-bot
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" npx playwright test
+
+      - name: 📸 上传失败截图
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-screenshots
+          path: .profiles/screenshot
+          retention-days: 7
