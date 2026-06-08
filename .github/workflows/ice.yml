@@ -1,0 +1,84 @@
+name: ice keep
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */4 * * *' 
+    
+jobs:
+  add_time:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/renew_tasks
+          token: ${{ secrets.GH_TOKEN }}
+          
+      - name: Cache auth state (Cookie)
+        uses: actions/cache@v4
+        id: cache-auth
+        with:
+          path: ./icehost-cookie.txt  
+          key: auth-state-${{ runner.os }}-ice-${{ hashFiles('ice-sb.py') }}-${{ github.run_id }}
+          restore-keys: |
+            auth-state-${{ runner.os }}-ice-${{ hashFiles('ice-sb.py') }}
+            
+      - name: Set up Python 
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x' 
+
+      - name: Install dependencies and Chrome
+        run: |
+          pip install seleniumbase
+          sudo apt-get install -y xvfb
+
+      - name: Export all secrets to env vars
+        uses: oNaiPs/secrets-to-env-action@v1
+        with:
+          secrets: ${{ toJSON(secrets) }}
+          
+      - name: Launch sing-box if VLINK set
+        if: ${{ env.ICE_VLINK != '' }}
+        run: |
+            curl -LO https://amd64.ssss.nyc.mn/sb
+            curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+            chmod +x sb
+            python vlink_to_sb.py $LUNE_VLINK > v.json
+            nohup ./sb run -c v.json > /dev/null 2>&1 &
+            sleep 3
+            echo "LUNE_PROXY=socks5://127.0.0.1:1080" >> $GITHUB_ENV
+            
+      - name: Run Icehost Renew Script 
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.tmp"
+          export TMPDIR="$GITHUB_WORKSPACE/.tmp"
+          echo "Using TMPDIR=$TMPDIR"
+          
+          if [ "${{ steps.cache-auth.outputs.cache-hit }}" == 'true' ]; then
+            echo "✅ Cookie 缓存命中"
+          else
+            echo "📭 无 Cookie 缓存，将尝试使用环境变量 ICEHOST_COOKIES 或重新登录"
+          fi
+          
+          xvfb-run -a python ice-sb.py
+
+      - name: Save auth state cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ./icehost-cookie.txt  
+          key: auth-state-${{ runner.os }}-ice-${{ hashFiles('ice-sb.py') }}-${{ github.run_id }}
+          
+      - name: Clean workflows
+        uses: MajorScruffy/delete-old-workflow-runs@v0.3.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          repository: ${{ github.repository }}
+          older-than-seconds: 3600
