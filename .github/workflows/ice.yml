@@ -2,8 +2,6 @@ name: ice keep
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 */4 * * *' 
     
 jobs:
   add_time:
@@ -19,8 +17,8 @@ jobs:
           repository: ${{ github.repository_owner }}/renew_tasks
           token: ${{ secrets.GH_TOKEN }}
           
-      - name: Cache auth state (Cookie)
-        uses: actions/cache@v4
+      - name: Restore auth state (Cookie)
+        uses: actions/cache/restore@v4
         id: cache-auth
         with:
           path: ./icehost-cookie.txt  
@@ -61,8 +59,8 @@ jobs:
           export TMPDIR="$GITHUB_WORKSPACE/.tmp"
           echo "Using TMPDIR=$TMPDIR"
           
-          if [ "${{ steps.cache-auth.outputs.cache-hit }}" == 'true' ]; then
-            echo "✅ Cookie 缓存命中"
+          if [ -f "./icehost-cookie.txt" ]; then
+            echo "✅ Cookie 文件已成功从缓存恢复"
           else
             echo "📭 无 Cookie 缓存，将尝试使用环境变量 ICEHOST_COOKIES 或重新登录"
           fi
