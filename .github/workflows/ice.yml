@@ -22,9 +22,9 @@ jobs:
         id: cache-auth
         with:
           path: ./icehost-cookie.txt  
-          key: auth-state-${{ runner.os }}-ice-${{ hashFiles('ice-sb.py') }}-${{ github.run_id }}
+          key: icehost-cookie-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
-            auth-state-${{ runner.os }}-ice-${{ hashFiles('ice-sb.py') }}
+            icehost-cookie-${{ runner.os }}-
             
       - name: Set up Python 
         uses: actions/setup-python@v5
@@ -72,7 +72,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ./icehost-cookie.txt  
-          key: auth-state-${{ runner.os }}-ice-${{ hashFiles('ice-sb.py') }}-${{ github.run_id }}
+          key: icehost-cookie-${{ runner.os }}-${{ github.run_id }}
           
       - name: Clean workflows
         uses: MajorScruffy/delete-old-workflow-runs@v0.3.0
