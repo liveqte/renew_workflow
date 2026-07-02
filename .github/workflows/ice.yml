@@ -80,4 +80,4 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           repository: ${{ github.repository }}
-          older-than-seconds: 3600
+          older-than-seconds: 43200
