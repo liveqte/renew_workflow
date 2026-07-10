@@ -1,0 +1,77 @@
+name: Auto Renew Katabump
+
+on:  
+  schedule:
+    - cron: '22 1 * * *'  # 每天运行一次（UTC时间 03:17）
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+   pre-check:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.check.outputs.should_skip }} 
+    steps:
+      - name: Interval Check (Strict 4-day cycle)
+        id: check
+        run: |        
+          # 计算当前 Unix 天数 (UTC)
+          DAYS=$(( $(date -u +%s) / 86400 ))
+          REMAINDER=$(( $DAYS % 4 ))
+          
+          if [ $REMAINDER -ne 0 ]; then
+            echo "should_skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_skip=false" >> $GITHUB_OUTPUT
+          fi
+   auto_renew_katabump:
+    needs: pre-check
+    if: needs.pre-check.outputs.should_skip != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write  
+      contents: read
+    steps:
+    - uses: actions/checkout@v6
+    - name: ⚙ 设置 Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.12'
+
+    - name: 🛠️ 安装系统依赖和python依赖
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb x11-utils xdotool scrot fonts-noto-cjk
+        pip install seleniumbase requests
+        seleniumbase install chromedriver
+
+    - name: ⚙ 设置代理 (sing-box)
+      continue-on-error: true
+      env:
+        NODE_LINK: ${{ secrets.KATA_LINK }}
+      run: |
+        bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh)
+
+    - name: 🚀 运行续期脚本
+      env:
+        KATABUMP_EMAIL: ${{ secrets.KATABUMP_EMAIL }}
+        KATABUMP_PASSWORD: ${{ secrets.KATABUMP_PASSWORD }}
+        TG_BOT_TOKEN: ${{ secrets.TG_BOT }}
+        TG_CHAT_ID: ${{ secrets.TG_USERID }}
+      run: |
+        xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+          python3 app.py
+        
+    - name: 🧹 清理旧的工作流运行记录
+      if: always()
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        runs=$(gh run list --workflow="${{ github.workflow }}" --limit=100 --json databaseId --jq '.[].databaseId')
+        count=0
+        for run_id in $runs; do
+          count=$((count + 1))
+          if [ $count -gt 1 ]; then
+            echo "删除运行记录: $run_id"
+            gh run delete $run_id || true
+          fi
+        done
