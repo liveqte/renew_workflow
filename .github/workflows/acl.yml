@@ -31,7 +31,7 @@ jobs:
           
       - name: Launch sing-box if VLINK set
         env:
-          VLINK: ${{ secrets.KATA_VLINK }}
+          VLINK: ${{ secrets.KATA_LINK }}
         run: |
             curl -LO https://amd64.ssss.nyc.mn/sb
             curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
