@@ -31,11 +31,15 @@ jobs:
         with:
           python-version: '3.x' 
 
-      - name: Install dependencies and Chrome
+      - name: Install dependencies
         run: |
           pip install seleniumbase
           sudo apt-get install -y xvfb
-
+          
+      - uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: 144
+          
       - name: Export all secrets to env vars
         uses: oNaiPs/secrets-to-env-action@v1
         with:
