@@ -29,9 +29,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: write
-       
-     steps:
+      actions: write    
+    steps:
       - uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/renew_tasks
