@@ -18,7 +18,7 @@ jobs:
           token: ${{ secrets.GH_TOKEN }}
           
       - name: Restore auth state (Cookie)
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         id: cache-auth
         with:
           path: ./icehost-cookie.txt  
@@ -73,7 +73,7 @@ jobs:
 
       - name: Save auth state cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         with:
           path: ./icehost-cookie.txt  
           key: icehost-cookie-${{ runner.os }}-${{ github.run_id }}
