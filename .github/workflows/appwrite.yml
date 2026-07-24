@@ -1,4 +1,4 @@
-name: zira-Renew
+name: appwrite-Renew
 
 on:
   workflow_dispatch:
