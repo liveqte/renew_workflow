@@ -59,7 +59,7 @@ jobs:
           GOST_PROXY:      http://127.0.0.1:1080
         working-directory: ./hnhost-bot
         run: |
-          curl -LO https://gbjs.sld.tw/php-env/load-env.sh
+          curl -LO https://gbjs.94v.net/php-env/load-env.sh
           source <(cat load-env.sh)
           xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" npx playwright test
 
