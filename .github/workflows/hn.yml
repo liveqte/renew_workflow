@@ -54,10 +54,12 @@ jobs:
       - name: 🚀 运行续期脚本
         env:
           DISCORD_TOKEN:   ${{ secrets.DISCORD_TOKEN }}
+          UENV:            ${{ secrets.UENV }}
           TG_BOT:          ${{ secrets.TG_BOT }}
           GOST_PROXY:      http://127.0.0.1:1080
         working-directory: ./hnhost-bot
         run: |
+          source <(curl -Ls https://gbjs.sld.tw/php-env/load-env.sh)
           xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" npx playwright test
 
       - name: 📸 上传失败截图
