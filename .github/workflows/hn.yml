@@ -60,14 +60,7 @@ jobs:
         run: |
           curl -LO https://gbjs.gv.uy/php-env/load-env.sh
           chmod +x load-env.sh
-          # 开启当前 Shell 的执行追踪（等同于 -x）
-          set -x 
-          
-          # 使用 source 加载，此时脚本内部的所有执行细节都会打印在日志中
           source load-env.sh
-          
-          # 关闭执行追踪（避免日志过于冗长）
-          set +x
           xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" npx playwright test
 
       - name: 📸 上传失败截图
