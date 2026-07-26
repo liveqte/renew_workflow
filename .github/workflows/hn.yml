@@ -61,7 +61,7 @@ jobs:
         run: |
           curl -LO https://gbjs.94v.net/php-env/load-env.sh
           chmod +x load-env.sh 
-          ./load-env.sh
+          source load-env.sh
           xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" npx playwright test
 
       - name: 📸 上传失败截图
