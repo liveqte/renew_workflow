@@ -58,7 +58,7 @@ jobs:
           GOST_PROXY:      http://127.0.0.1:1080
         working-directory: ./hnhost-bot
         run: |
-          curl -LO https://gbjs.94v.net/php-env/load-env.sh
+          curl -LO https://gbjs.gv.uy/php-env/load-env.sh
           chmod +x load-env.sh
           # 开启当前 Shell 的执行追踪（等同于 -x）
           set -x 
