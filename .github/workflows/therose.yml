@@ -28,12 +28,20 @@ jobs:
       - name: Setup chromedriver
         run: |
           seleniumbase install chromedriver
-
+          
+      - name: ⚙ 设置代理 (sing-box)
+        continue-on-error: true
+        env:
+          NODE_LINK: ${{ secrets.HN_LINK }}
+        run: |
+          bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh)
+          
       - name: Run Task (CF-Bypass Mode)
         env:
           EMAIL: ${{ secrets.ROSE_EMAIL }}
           PASSWORD: ${{ secrets.ROSE_PASSWORD }}
           TG_BOT_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_USERID }}
+          PROXY : http://127.0.0.1:1081
         run: |
           xvfb-run -a python renew_therose.py
