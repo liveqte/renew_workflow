@@ -41,6 +41,7 @@ jobs:
           NEOH_AUTH: ${{ secrets.NEOH_AUTH }}
           TG_BOT_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_USERID }}
+          NEOH_COOKIE: ${{ secrets.NEOH_COOKIE }}
           PROXY : http://127.0.0.1:1081
         run: |
           xvfb-run -a python neohe-sb.py
