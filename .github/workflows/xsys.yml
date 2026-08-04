@@ -1,0 +1,49 @@
+name: xsystem keep
+
+on:
+  workflow_dispatch: # 允许在 Actions 页面手动触发
+  schedule:
+    - cron: '26 2 */2 * *'
+
+jobs:
+  add_time:
+    runs-on: ubuntu-latest 
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/renew_tasks
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Set up Python 
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10' # 指定具体版本更稳定
+
+      - name: Install dependencies
+        run: |
+          # 安装你脚本实际需要的依赖：requests, beautifulsoup4, 以及支持 socks 的 PySocks
+          pip install requests beautifulsoup4 PySocks
+
+      - name: Export all secrets to env vars
+        uses: oNaiPs/secrets-to-env-action@v1
+        with:
+          secrets: ${{ toJSON(secrets) }}
+
+      - name: Launch sing-box if VLINK set
+        if: ${{ env.HN_VLINK != '' }}
+        run: |
+              curl -LO https://amd64.ssss.nyc.mn/sb
+              curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+              chmod +x sb
+              python vlink_to_sb.py $HN_VLINK > v.json
+              nohup ./sb run -c v.json > /dev/null 2>&1 &
+              sleep 3
+              echo "PROXY=socks5://127.0.0.1:1080" >> $GITHUB_ENV
+
+      - name: Run Time Adder Script 
+        run: |
+          python always-bs4.py
