@@ -13,7 +13,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v5
         with:
           repository: ${{ github.repository_owner }}/renew_tasks
           token: ${{ secrets.GH_TOKEN }}
@@ -46,4 +46,4 @@ jobs:
 
       - name: Run Time Adder Script 
         run: |
-          python always-bs4.py
+          python xsys-bs4.py
