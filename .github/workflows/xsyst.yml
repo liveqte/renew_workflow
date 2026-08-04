@@ -37,6 +37,5 @@ jobs:
       - name: Run Time Adder Script 
         env:
            XSYS_COOKIE:  ${{ secrets.XSYS_COOKIE }}
-           PORXY: http://127.0.0.1:1081
         run: |
           python xsys-bs4.py
