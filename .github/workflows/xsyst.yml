@@ -1,4 +1,4 @@
-name: xsystem keep
+name: xsys keep
 
 on:
   workflow_dispatch: # 允许在 Actions 页面手动触发
@@ -13,7 +13,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/renew_tasks
           token: ${{ secrets.GH_TOKEN }}
@@ -25,7 +25,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # 安装你脚本实际需要的依赖：requests, beautifulsoup4, 以及支持 socks 的 PySocks
           pip install requests beautifulsoup4 PySocks
 
       - name: Export all secrets to env vars
