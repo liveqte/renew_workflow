@@ -26,9 +26,17 @@ jobs:
       - name: Install dependencies
         run: |
           pip install requests beautifulsoup4 PySocks
-
+          
+      - name: vlink_to_sb
+        continue-on-error: true
+        env:
+          NODE_LINK: ${{ secrets.HN_VLINK }}
+        run: |
+          bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh)
+          
       - name: Run Time Adder Script 
         env:
            XSYS_COOKIE:  ${{ secrets.XSYS_COOKIE }}
+           PORXY: http://127.0.0.1:1081
         run: |
           python xsys-bs4.py
