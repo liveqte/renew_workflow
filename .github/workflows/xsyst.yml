@@ -18,3 +18,17 @@ jobs:
           repository: ${{ github.repository_owner }}/renew_tasks
           token: ${{ secrets.GH_TOKEN }}
 
+      - name: Set up Python 
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10' # 指定具体版本更稳定
+
+      - name: Install dependencies
+        run: |
+          pip install requests beautifulsoup4 PySocks
+
+      - name: Run Time Adder Script 
+        env:
+           XSYS_COOKIE:  ${{ secrets.XSYS_COOKIE }}
+        run: |
+          python xsys-bs4.py
