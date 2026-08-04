@@ -33,17 +33,6 @@ jobs:
         with:
           secrets: ${{ toJSON(secrets) }}
 
-      - name: Launch sing-box if VLINK set
-        if: ${{ env.HN_VLINK != '' }}
-        run: |
-              curl -LO https://amd64.ssss.nyc.mn/sb
-              curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
-              chmod +x sb
-              python vlink_to_sb.py $HN_VLINK > v.json
-              nohup ./sb run -c v.json > /dev/null 2>&1 &
-              sleep 3
-              echo "PROXY=socks5://127.0.0.1:1080" >> $GITHUB_ENV
-
       - name: Run Time Adder Script 
         run: |
           python xsys-bs4.py
