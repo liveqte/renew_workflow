@@ -44,6 +44,8 @@ jobs:
         env:
           PYTHONIOENCODING: utf-8
           COOKIE: ${{ secrets.ACL_COOKIE }}
+          ALC_PASS: ${{ secrets.ALC_PASS }}
+          ACL_NAME: ${{ secrets.ACL_NAME }}
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_USERID }}
           PROXY: socks5://127.0.0.1:1080
