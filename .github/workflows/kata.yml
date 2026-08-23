@@ -47,13 +47,26 @@ jobs:
           sudo apt-get install -y xvfb x11-utils xdotool scrot fonts-noto-cjk
           pip install seleniumbase requests
           seleniumbase install chromedriver
-  
-      - name: ⚙ 设置代理 (sing-box)
-        continue-on-error: true
+          
+      - name: Launch sing-box if VLINK set
         env:
-          NODE_LINK: ${{ secrets.KATA_LINK }}
+          VLINK: ${{ secrets.KATA_LINK }}
+        if: ${{ env.VLINK != '' }}
         run: |
-          bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh)
+            curl -LO https://amd64.ssss.nyc.mn/sb
+            curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+            chmod +x sb
+            python vlink_to_sb.py $VLINK > v.json
+            nohup ./sb run -c v.json > /dev/null 2>&1 &
+            sleep 3
+            
+      # - name: ⚙ 设置代理 (sing-box)
+      #   continue-on-error: true
+      #   env:
+      #     NODE_LINK: ${{ secrets.KATA_LINK }}
+      #   run: |
+      #     bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh)
+      
   
       - name: 🚀 运行续期脚本
         env:
