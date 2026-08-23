@@ -43,7 +43,7 @@ jobs:
       - name: Run Time Adder Script 
         env:
            WISPBYTE_1: ${{ secrets.WISPBYTE_1 }}
-           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
-           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+           TG_BOT_TOKEN: ${{ secrets.TG_TOKEN }}
+           TG_CHAT_ID: ${{ secrets.TG_USERID }}
         run: |
           python wisp-sb.py
