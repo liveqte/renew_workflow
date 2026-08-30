@@ -12,7 +12,7 @@ jobs:
   renew:
     name: 🔄 执行续期
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: 📥 拉取代码
         uses: actions/checkout@v4
