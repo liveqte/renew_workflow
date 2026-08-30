@@ -14,35 +14,57 @@ jobs:
         with:
           repository: ${{ github.repository_owner }}/renew_tasks
           token: ${{ secrets.GH_TOKEN }}
-          
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-  
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install seleniumbase requests
-          
-      - name: Setup Chrome
+
+      - name: Setup Chrome & tesseract
         run: |
           seleniumbase install chromedriver
-          
+          sudo apt-get update -y
+          sudo apt-get install -y tesseract-ocr
+
+      - name: Debug environment info
+        run: |
+          echo "=== Chrome 版本 ==="
+          google-chrome --version || true
+          echo "=== Chromedriver 版本 ==="
+          chromedriver --version 2>/dev/null || true
+          echo "=== tesseract 版本 ==="
+          tesseract --version 2>/dev/null | head -1 || echo "⚠️ tesseract 未安装"
+          echo "=== Python 版本 ==="
+          python --version
+
       - name: Launch sing-box if VLINK set
         env:
           VLINK: ${{ secrets.KATA_LINK }}
         run: |
-            curl -LO https://amd64.ssss.nyc.mn/sb
-            curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
-            chmod +x sb
-            python vlink_to_sb.py $VLINK > v.json
-            nohup ./sb run -c v.json > /dev/null 2>&1 &
-            sleep 3
-  
+          if [ -z "$VLINK" ]; then
+            echo "VLINK 未设置，跳过 sing-box（脚本将使用直连）"
+            exit 0
+          fi
+          curl -LO https://amd64.ssss.nyc.mn/sb
+          curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+          chmod +x sb
+          python vlink_to_sb.py $VLINK > v.json
+          nohup ./sb run -c v.json > sb.log 2>&1 &
+          sleep 3
+          echo "=== sing-box 进程 ==="
+          pgrep -a sb || echo "⚠️ sing-box 未在运行"
+          echo "=== 代理连通性检查 ==="
+          curl -s -x socks5://127.0.0.1:1080 --max-time 15 https://api.ipify.org && echo " ← 代理出口 IP" || echo "❌ 代理连通性检查失败"
+
       - name: Run Task (CF-Bypass Mode)
         env:
           PYTHONIOENCODING: utf-8
+          PYTHONUNBUFFERED: 1
           COOKIE: ${{ secrets.ACL_COOKIE }}
           ALC_PASS: ${{ secrets.ALC_PASS }}
           ACL_NAME: ${{ secrets.ACL_NAME }}
@@ -50,4 +72,17 @@ jobs:
           TG_CHAT_ID: ${{ secrets.TG_USERID }}
           PROXY: socks5://127.0.0.1:1080
         run: |
-          xvfb-run -a python aclcloud-sb.py
+          set -o pipefail
+          xvfb-run -a python -u aclcloud-sb.py 2>&1 | tee run_output.log
+
+      - name: Upload debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-artifacts
+          path: |
+            artifacts/
+            run_output.log
+            sb.log
+          if-no-files-found: ignore
+          retention-days: 7
