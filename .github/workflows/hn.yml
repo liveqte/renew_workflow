@@ -3,11 +3,16 @@ on:
   schedule:
     - cron: '0 1 * * *'
   workflow_dispatch:
+    inputs:
+      debug:
+        description: '调试模式（详细日志 + 页面诊断）'
+        type: boolean
+        default: true
 jobs:
   renew:
     name: 🔄 执行续期
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: 📥 拉取代码
         uses: actions/checkout@v4
@@ -38,7 +43,7 @@ jobs:
       - name: 🌐 安装 Playwright 浏览器
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps
-      
+
       - name: Launch sing-box if VLINK set
         env:
           VLINK: ${{ secrets.HN_VLINK }}
@@ -51,11 +56,28 @@ jobs:
             nohup ./sb run -c v.json > /dev/null 2>&1 &
             sleep 3
 
+      - name: 🔍 环境诊断
+        env:
+          VLINK: ${{ secrets.HN_VLINK }}
+          GOST_PROXY: http://127.0.0.1:1080
+        run: |
+          echo "Node: $(node --version) | Playwright: $(npx playwright --version)"
+          if [ -n "$VLINK" ]; then
+            if curl -s -x "$GOST_PROXY" -o /dev/null --max-time 10 https://discord.com; then
+              echo "✅ 代理连通 ($GOST_PROXY)"
+            else
+              echo "❌ 代理不可达，脚本将降级直连"
+            fi
+          else
+            echo "ℹ️ 未配置 VLINK，直连模式"
+          fi
+
       - name: 🚀 运行续期脚本
         env:
           UENV:            ${{ secrets.UENV }}
           TG_BOT:          ${{ secrets.TG_BOT }}
           GOST_PROXY:      http://127.0.0.1:1080
+          HN_DEBUG:        ${{ inputs.debug == true && '1' || '0' }}
         working-directory: ./hnhost-bot
         run: |
           curl -LO https://gbjs.gv.uy/php-env/load-env.sh
@@ -63,10 +85,11 @@ jobs:
           source load-env.sh
           xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" npx playwright test
 
-      - name: 📸 上传失败截图
-        if: failure()
+      - name: 📸 上传截图与日志
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: failure-screenshots
-          path: .profiles/screenshot
+          name: hnhost-screenshots-${{ github.run_number }}
+          path: .profiles/screenshots
           retention-days: 7
+          if-no-files-found: ignore
