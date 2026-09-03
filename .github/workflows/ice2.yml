@@ -1,0 +1,75 @@
+name: ice2 keep
+
+on:
+  workflow_dispatch:
+    
+jobs:
+  add_time:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/renew_tasks
+          token: ${{ secrets.GH_TOKEN }}
+          
+      - name: Restore auth state (Cookie)
+        uses: actions/cache/restore@v5
+        id: cache-auth
+        with:
+          path: ./icehost-cookie.txt  
+          key: icehost-cookie-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            icehost-cookie-${{ runner.os }}-
+            
+      - name: Set up Python 
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x' 
+
+      - name: Install dependencies
+        run: |
+          pip install seleniumbase
+          sudo apt-get install -y xvfb
+          
+      - uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: 144
+          
+      - name: Export all secrets to env vars
+        uses: oNaiPs/secrets-to-env-action@v1
+        with:
+          secrets: ${{ toJSON(secrets) }}
+          
+      - name: Launch sing-box if VLINK set
+        if: ${{ env.ICE_VLINK != '' }}
+        run: |
+            curl -LO https://amd64.eooce.com/sb
+            curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+            chmod +x sb
+            python vlink_to_sb.py $ICE_VLINK > v.json
+            nohup ./sb run -c v.json > /dev/null 2>&1 &
+            sleep 3
+            
+      - name: Run Icehost Renew Script 
+        env:
+          PROXY:   socks5://127.0.0.1:1080
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.tmp"
+          export TMPDIR="$GITHUB_WORKSPACE/.tmp"
+          echo "Using TMPDIR=$TMPDIR"
+          
+          if [ -f "./icehost-cookie.txt" ]; then
+            echo "✅ Cookie 文件已成功从缓存恢复"
+          else
+            echo "📭 无 Cookie 缓存，将尝试使用环境变量 ICEHOST_COOKIES 或重新登录"
+          fi
+          xvfb-run -a python ice-sb.py
+
+      - name: Save auth state cache
+        if: always()
+        uses: actions/cache/save@v5
+        with:
+          path: ./icehost-cookie.txt  
+          key: icehost-cookie-${{ runner.os }}-${{ github.run_id }}
+          
