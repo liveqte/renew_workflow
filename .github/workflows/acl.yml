@@ -44,7 +44,7 @@ jobs:
 
       - name: Launch sing-box if VLINK set
         env:
-          VLINK: ${{ secrets.KATA_LINK }}
+          VLINK: ${{ secrets.ACL_LINK }}
         run: |
           if [ -z "$VLINK" ]; then
             echo "VLINK 未设置，跳过 sing-box（脚本将使用直连）"
