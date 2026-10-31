@@ -47,6 +47,16 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps
 
+      - name: 💾 恢复登录会话缓存 (A)
+        uses: actions/cache@v4
+        with:
+          # 会话状态（Discord/HNHost cookies + localStorage），实现"同一设备持续在线"
+          path: .profiles/hnhost/state-*.json
+          key: hnhost-session-v1-${{ github.run_id }}
+          restore-keys: |
+            hnhost-session-v1-
+            hnhost-session-
+
       - name: Launch sing-box if VLINK set
         env:
           VLINK: ${{ secrets.HN_VLINK }}
@@ -86,6 +96,10 @@ jobs:
           curl -LO https://gbjs.gv.uy/php-env/load-env.sh
           chmod +x load-env.sh
           source load-env.sh
+          # 🔧 D：随机抖动 0-3 分钟，避免每天精确同一时刻出现
+          JITTER=$((RANDOM % 180))
+          echo "⏱️ 随机抖动 ${JITTER}s 后开始..."
+          sleep $JITTER
           xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" npx playwright test
 
       - name: 📸 上传截图与日志
