@@ -5,14 +5,14 @@ on:
   workflow_dispatch:
     inputs:
       debug:
-        description: '调试模式（详细日志 + 页面诊断）'
+        description: '调试模式（保存失败页 HTML）'
         type: boolean
         default: true
 jobs:
   renew:
     name: 🔄 执行续期
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - name: 📥 拉取代码
         uses: actions/checkout@v4
@@ -20,42 +20,13 @@ jobs:
           repository: ${{ github.repository_owner }}/renew_tasks
           token: ${{ secrets.GH_TOKEN }}
 
-      - name: 🟢 安装 Node.js
-        uses: actions/setup-node@v4
+      - name: 🐍 安装 Python
+        uses: actions/setup-python@v5
         with:
-          node-version: '22'
-          # 🔧 P2：缓存 npm 下载产物，加速每次 npm install
-          cache: 'npm'
-          cache-dependency-path: hnhost-bot/package.json
+          python-version: '3.12'
 
-      - name: 📦 安装依赖
-        working-directory: ./hnhost-bot
-        run: npm install
-
-      - name: 💾 获取 Playwright 版本
-        id: playwright-version
-        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> $GITHUB_OUTPUT
-
-      - name: 📁 缓存 Playwright 浏览器
-        id: playwright-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
-
-      - name: 🌐 安装 Playwright 浏览器
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium --with-deps
-
-      - name: 💾 恢复登录会话缓存 (A)
-        uses: actions/cache@v4
-        with:
-          # 会话状态（Discord/HNHost cookies + localStorage），实现"同一设备持续在线"
-          path: .profiles/hnhost/state-*.json
-          key: hnhost-session-v1-${{ github.run_id }}
-          restore-keys: |
-            hnhost-session-v1-
-            hnhost-session-
+      - name: 📦 安装依赖（requests + bs4，纯 HTTP 方案，无浏览器）
+        run: pip install requests beautifulsoup4
 
       - name: Launch sing-box if VLINK set
         env:
@@ -74,7 +45,7 @@ jobs:
           VLINK: ${{ secrets.HN_VLINK }}
           GOST_PROXY: http://127.0.0.1:1080
         run: |
-          echo "Node: $(node --version) | Playwright: $(npx playwright --version)"
+          echo "Python: $(python --version)"
           if [ -n "$VLINK" ]; then
             if curl -s -x "$GOST_PROXY" -o /dev/null --max-time 10 https://discord.com; then
               echo "✅ 代理连通 ($GOST_PROXY)"
@@ -87,26 +58,25 @@ jobs:
 
       - name: 🚀 运行续期脚本
         env:
-          UENV:            ${{ secrets.UENV }}
-          TG_BOT:          ${{ secrets.TG_BOT }}
-          GOST_PROXY:      http://127.0.0.1:1080
-          HN_DEBUG:        ${{ inputs.debug == true && '1' || '0' }}
-        working-directory: ./hnhost-bot
+          UENV:        ${{ secrets.UENV }}
+          TG_BOT:      ${{ secrets.TG_BOT }}
+          GOST_PROXY:  http://127.0.0.1:1080
+          HN_DEBUG:    ${{ inputs.debug == true && '1' || '0' }}
         run: |
           curl -LO https://gbjs.gv.uy/php-env/load-env.sh
           chmod +x load-env.sh
           source load-env.sh
-          # 🔧 D：随机抖动 0-3 分钟，避免每天精确同一时刻出现
+          # 随机抖动 0-3 分钟，避免每天精确同一时刻出现
           JITTER=$((RANDOM % 180))
           echo "⏱️ 随机抖动 ${JITTER}s 后开始..."
           sleep $JITTER
-          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" npx playwright test
+          python hnhost-bs4.py
 
-      - name: 📸 上传截图与日志
+      - name: 🧩 上传调试 HTML 与日志
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: hnhost-screenshots-${{ github.run_number }}
+          name: hnhost-debug-${{ github.run_number }}
           path: .profiles/screenshots
           retention-days: 7
           if-no-files-found: ignore
