@@ -104,6 +104,7 @@ jobs:
 
       - name: 🧹 清理旧的工作流运行记录
         if: always()
+        continue-on-error: true # 清理失败不应影响登录结果
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
