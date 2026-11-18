@@ -1,0 +1,119 @@
+name: Ryft auto login
+
+on:
+  workflow_dispatch: # 允许在 Actions 页面手动触发
+  schedule:
+    # 每 10 天登录一次（Ryft 免费服务器 10 天周期）；用每月 1/11/21 日近似，
+    # 月底间隔会缩短到 8~11 天。UTC 03:37 = 北京时间 11:37，错峰避开整点调度拥堵。
+    - cron: '37 3 1,11,21 * *'
+
+# 避免定时任务与手动触发同时运行
+concurrency:
+  group: ryft-login
+  cancel-in-progress: false
+
+jobs:
+  login:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: write # 清理旧的工作流运行记录
+      contents: read
+
+    steps:
+      - name: Checkout renew_tasks
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/renew_tasks
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: ⚙ 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 🛠️ 安装系统依赖和 Python 依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb x11-utils xdotool scrot fonts-noto-cjk jq wget
+          pip install seleniumbase requests PySocks
+          seleniumbase install chromedriver
+
+      - name: Check proxy link
+        id: proxy
+        env:
+          VLINK: ${{ secrets.RYFT_VLINK }}
+        run: |
+          if [ -n "$VLINK" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Launch sing-box if VLINK set
+        if: ${{ steps.proxy.outputs.enabled == 'true' }}
+        env:
+          VLINK: ${{ secrets.RYFT_VLINK }}
+        run: |
+            curl -LO https://amd64.ssss.nyc.mn/sb
+            curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+            chmod +x sb
+            python vlink_to_sb.py "$VLINK" > v.json
+            echo "v.json size: $(wc -c < v.json) bytes"
+            nohup ./sb run -c v.json > sb.log 2>&1 &
+            sleep 5
+            if ! ss -tln 2>/dev/null | grep -q ':1080'; then
+              echo "::error::sing-box 未在 1080 端口监听，最后日志："
+              tail -n 15 sb.log | sed -E 's/[A-Za-z0-9+\/=]{24,}/[MASKED]/g'
+              exit 1
+            fi
+            echo "✅ sing-box 已监听 1080"
+            echo "PROXY=socks5://127.0.0.1:1080" >> "$GITHUB_ENV"
+
+      - name: 🚀 运行登录脚本
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          # Cookie 缓存：登录成功后脚本自动回写 RYFT_COOKIES，下次运行优先用缓存免 OAuth
+          RYFT_COOKIES: ${{ secrets.RYFT_COOKIES }}
+          # 用于回写 RYFT_COOKIES secret；需要 PAT 有 renew_workflow 的 secrets 写权限
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          # 复用 renew_workflow 已有的 TG_TOKEN / TG_USERID
+          TG_BOT_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_USERID }}
+          SCREENSHOT_DIR: screenshots
+          PYTHONIOENCODING: utf-8
+          PYTHONUNBUFFERED: '1'
+        run: |
+          xvfb-run --auto-servernum python -u ryft-sb.py
+
+      - name: 📸 上传登录截图
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ryft-screenshots-${{ github.run_number }}
+          path: screenshots/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: 🧽 清理进程
+        if: always()
+        run: |
+          pkill -f chromedriver || true
+          pkill -f chrome || true
+          pkill -f Xvfb || true
+
+      - name: 🧹 清理旧的工作流运行记录
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 注意：checkout 的是 renew_tasks，必须显式指定目标是当前工作流仓库
+          runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow="${{ github.workflow }}" --limit=100 --json databaseId --jq '.[].databaseId')
+          count=0
+          for run_id in $runs; do
+            count=$((count + 1))
+            if [ $count -gt 1 ]; then
+              echo "删除运行记录: $run_id"
+              gh run delete "$run_id" --repo "$GITHUB_REPOSITORY" || true
+            fi
+          done
