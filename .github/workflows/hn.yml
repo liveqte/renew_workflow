@@ -58,14 +58,16 @@ jobs:
 
       - name: 🚀 运行续期脚本
         env:
-          UENV:        ${{ secrets.UENV }}
+          # 直接注入 Discord token，不再通过 UENV + load-env.sh 批量导出
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           TG_BOT:      ${{ secrets.TG_BOT }}
           GOST_PROXY:  http://127.0.0.1:1080
           HN_DEBUG:    ${{ inputs.debug == true && '1' || '0' }}
         run: |
-          curl -LO https://gbjs.gv.uy/php-env/load-env.sh
-          chmod +x load-env.sh
-          source load-env.sh
+          if [ -z "$DISCORD_TOKEN" ]; then
+            echo "::error::缺少 DISCORD_TOKEN secret（Settings → Secrets and variables → Actions）"
+            exit 1
+          fi
           # 随机抖动 0-3 分钟，避免每天精确同一时刻出现
           JITTER=$((RANDOM % 180))
           echo "⏱️ 随机抖动 ${JITTER}s 后开始..."
