@@ -1,0 +1,113 @@
+name: discloud keepalive daily
+
+on:
+  workflow_dispatch: # 允许在 Actions 页面手动触发此工作流，方便测试
+  schedule:
+    - cron: '37 1 * * *' # UTC 01:37（北京 09:37），每日检查应用状态并拉起离线应用
+
+# 避免定时任务与手动触发同时运行
+concurrency:
+  group: discloud-keepalive
+  cancel-in-progress: false
+
+jobs:
+  discloud_keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout renew_tasks
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/renew_tasks
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install python package
+        run: |
+          python -m pip install --upgrade pip
+          pip install seleniumbase loguru pysocks
+
+      - name: Check proxy link
+        id: proxy
+        env:
+          # 优先专用节点；没有则复用 switched 的节点
+          VLINK: ${{ secrets.DISCLOUD_VLINK || secrets.SWITCHED_VLINK }}
+        run: |
+          if [ -n "$VLINK" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Launch sing-box if VLINK set
+        if: ${{ steps.proxy.outputs.enabled == 'true' }}
+        env:
+          VLINK: ${{ secrets.DISCLOUD_VLINK || secrets.SWITCHED_VLINK }}
+        run: |
+            curl -LO https://amd64.ssss.nyc.mn/sb
+            curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+            chmod +x sb
+            python vlink_to_sb.py "$VLINK" > v.json
+            echo "v.json size: $(wc -c < v.json) bytes"
+            nohup ./sb run -c v.json > sb.log 2>&1 &
+            sleep 5
+            if ! ss -tln 2>/dev/null | grep -q ':1080'; then
+              echo "::error::sing-box 未在 1080 端口监听，最后日志："
+              tail -n 15 sb.log | sed -E 's/[A-Za-z0-9+\/=]{24,}/[MASKED]/g'
+              exit 1
+            fi
+            echo "✅ sing-box 已监听 1080"
+            # PROXY 同时供 requests 和浏览器使用（脚本里 BROWSER_PROXY 默认取 PROXY）
+            echo "PROXY=socks5://127.0.0.1:1080" >> "$GITHUB_ENV"
+
+      # 关键：必须用 Chrome for Testing，不能用 runner 自带的正式版 Google Chrome——
+      # Chrome 137 起正式版移除了 --load-extension（加载 unpacked 扩展即 NoneCap
+      # hCaptcha 解题插件的前提），只有 CfT/Chromium 仍支持。
+      - name: Install Chrome for Testing
+        run: |
+          curl -sL -o /tmp/chrome.zip \
+            https://storage.googleapis.com/chrome-for-testing-public/157.0.8103.78/linux64/chrome-linux64.zip
+          unzip -q /tmp/chrome.zip -d "$GITHUB_WORKSPACE/cft"
+          echo "CHROME_BINARY=$GITHUB_WORKSPACE/cft/chrome-linux64/chrome" >> "$GITHUB_ENV"
+
+      - name: Run discloud keepalive script
+        env:
+          # 登录凭据（二选一，脚本自动选择）：
+          #   DISCORD_TOKEN         Discord 用户 token（登录页 OAuth + hCaptcha 全流程）
+          #   DISCLOUD_SESSION_ID   现成会话（上次运行产物 discloud_session_latest.txt 的内容）
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          DISCLOUD_SESSION_ID: ${{ secrets.DISCLOUD_SESSION_ID }}
+          # TG 通知复用 renew_workflow 已有的 TG_TOKEN / TG_USERID，也兼容同名 secret
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.TG_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || secrets.TG_USERID }}
+          HEADLESS: '1'
+          PYTHONIOENCODING: utf-8
+          PYTHONUNBUFFERED: '1'
+        run: |
+          if [ -z "$DISCORD_TOKEN" ] && [ -z "$DISCLOUD_SESSION_ID" ]; then
+            echo "::error::缺少登录凭据：请设置 DISCORD_TOKEN 或 DISCLOUD_SESSION_ID secret"
+            exit 1
+          fi
+          mkdir -p "$GITHUB_WORKSPACE/.tmp"
+          export TMPDIR="$GITHUB_WORKSPACE/.tmp"
+          echo "Using TMPDIR=$TMPDIR"
+          python discloud-sb.py
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discloud-artifacts-${{ github.run_number }}
+          path: |
+            screenshots
+            discloud_session_latest.txt
+          retention-days: 7
+          if-no-files-found: ignore
