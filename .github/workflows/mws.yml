@@ -77,6 +77,8 @@ jobs:
       - name: Run MWS renewal
         env:
           MWS_TOKEN: ${{ secrets.MWS_TOKEN }}
+          # 面板确认浏览器走同一个 sing-box 出口（脚本里 SeleniumBase 不读 HTTP_PROXY）
+          BROWSER_PROXY: socks5://127.0.0.1:1080
           # 自动换票使用 Discord 登录；GH_TOKEN 需有本仓库 Actions Secrets 写权限
           # （脚本用 gh secret set --repo "$GITHUB_REPOSITORY" 回写 MWS_TOKEN，即 renew_workflow）
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
