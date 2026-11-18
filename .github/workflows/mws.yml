@@ -32,14 +32,47 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb x11-utils xdotool scrot fonts-noto-cjk
-          python -m pip install 'requests>=2.31.0,<3' seleniumbase
+          # pysocks：requests 走 socks5:// 代理必需
+          python -m pip install 'requests>=2.31.0,<3' pysocks seleniumbase
           seleniumbase install chromedriver
 
-      - name: 启用 WARP 网络
-        uses: fscarmen/warp-on-actions@v1.3
-        with:
-          stack: dual
-          mode: client
+      # WARP 已停用：改用 VLINK → 本地 sing-box（socks5://127.0.0.1:1080）
+      # - name: 启用 WARP 网络
+      #   uses: fscarmen/warp-on-actions@v1.3
+      #   with:
+      #     stack: dual
+      #     mode: client
+
+      - name: Launch sing-box (SWITCHED_VLINK)
+        env:
+          VLINK: ${{ secrets.SWITCHED_VLINK }}
+        run: |
+            if [ -z "$VLINK" ]; then
+              echo "::error::缺少 SWITCHED_VLINK secret（Settings → Secrets and variables → Actions）"
+              exit 1
+            fi
+            curl -LO https://amd64.ssss.nyc.mn/sb
+            curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+            chmod +x sb
+            python vlink_to_sb.py "$VLINK" > v.json
+            echo "v.json size: $(wc -c < v.json) bytes"
+            nohup ./sb run -c v.json > sb.log 2>&1 &
+            sleep 5
+            if ! ss -tln 2>/dev/null | grep -q ':1080'; then
+              echo "::error::sing-box 未在 1080 端口监听，最后日志："
+              tail -n 15 sb.log | sed -E 's/[A-Za-z0-9+\/=]{24,}/[MASKED]/g'
+              exit 1
+            fi
+            echo "✅ sing-box 已监听 1080"
+            # requests 通过 trust_env 自动读取这几个变量；
+            # api.github.com 直连，避免 gh 回写 MWS_TOKEN 受节点影响。
+            {
+              echo "PROXY=socks5://127.0.0.1:1080"
+              echo "HTTP_PROXY=socks5://127.0.0.1:1080"
+              echo "HTTPS_PROXY=socks5://127.0.0.1:1080"
+              echo "ALL_PROXY=socks5://127.0.0.1:1080"
+              echo "NO_PROXY=127.0.0.1,localhost,api.github.com,github.com"
+            } >> "$GITHUB_ENV"
 
       - name: Run MWS renewal
         env:
