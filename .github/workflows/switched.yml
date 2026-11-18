@@ -19,10 +19,6 @@ jobs:
     permissions:
       contents: read
 
-    env:
-      # 代理节点：优先 SWITCHED_VLINK，兼容旧的 VLINK
-      VLINK: ${{ secrets.SWITCHED_VLINK || secrets.VLINK }}
-
     steps:
       - name: Checkout renew_tasks
         uses: actions/checkout@v6
@@ -40,8 +36,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install seleniumbase loguru pysocks requests
 
+      - name: Check proxy link
+        id: proxy
+        env:
+          # 代理节点：优先 SWITCHED_VLINK，兼容旧的 VLINK
+          VLINK: ${{ secrets.SWITCHED_VLINK || secrets.VLINK }}
+        run: |
+          if [ -n "$VLINK" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Launch sing-box if VLINK set
-        if: ${{ env.VLINK != '' }}
+        if: ${{ steps.proxy.outputs.enabled == 'true' }}
+        env:
+          VLINK: ${{ secrets.SWITCHED_VLINK || secrets.VLINK }}
         run: |
             curl -LO https://amd64.ssss.nyc.mn/sb
             curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
