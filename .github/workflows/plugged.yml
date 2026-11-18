@@ -35,6 +35,45 @@ jobs:
           python -m pip install --upgrade pip
           pip install seleniumbase loguru pysocks
 
+      - name: Check proxy link
+        id: proxy
+        env:
+          # 优先专用节点；没有则复用 switched 的节点
+          VLINK: ${{ secrets.PLUGGED_VLINK || secrets.SWITCHED_VLINK }}
+        run: |
+          if [ -n "$VLINK" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Launch sing-box if VLINK set
+        if: ${{ steps.proxy.outputs.enabled == 'true' }}
+        env:
+          VLINK: ${{ secrets.PLUGGED_VLINK || secrets.SWITCHED_VLINK }}
+        run: |
+            curl -LO https://amd64.ssss.nyc.mn/sb
+            curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+            chmod +x sb
+            python vlink_to_sb.py "$VLINK" > v.json
+            echo "v.json size: $(wc -c < v.json) bytes"
+            nohup ./sb run -c v.json > sb.log 2>&1 &
+            sleep 5
+            if ! ss -tln 2>/dev/null | grep -q ':1080'; then
+              echo "::error::sing-box 未在 1080 端口监听，最后日志："
+              tail -n 15 sb.log | sed -E 's/[A-Za-z0-9+\/=]{24,}/[MASKED]/g'
+              exit 1
+            fi
+            echo "✅ sing-box 已监听 1080"
+            echo "PROXY=socks5://127.0.0.1:1080" >> "$GITHUB_ENV"
+
+      - name: Verify local proxy port
+        run: |
+          if ! ss -tln 2>/dev/null | grep -q ':1080'; then
+            echo "::error::BROWSER_PROXY 指向 socks5://127.0.0.1:1080，但没有本地代理监听；请设置 PLUGGED_VLINK 或 SWITCHED_VLINK"
+            exit 1
+          fi
+
       - name: Run plugged tokens script
         env:
           PYTHONIOENCODING: utf-8
@@ -42,8 +81,8 @@ jobs:
           # noprofit 账号（必填）
           NOPROFIT_LOGIN: ${{ secrets.NOPROFIT_LOGIN }}
           NOPROFIT_PASSWORD: ${{ secrets.NOPROFIT_PASSWORD }}
-          # 浏览器独立出口：不设该 secret 时浏览器直连（与 switched 同约定）
-          BROWSER_PROXY: ${{ secrets.PLUGGED_BROWSER_PROXY }}
+          # 浏览器固定走本地 sing-box（requests 的 PROXY 由上一步写入 GITHUB_ENV）
+          BROWSER_PROXY: socks5://127.0.0.1:1080
           # TG 通知复用 renew_workflow 已有的 TG_TOKEN / TG_USERID，也兼容同名 secret
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.TG_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || secrets.TG_USERID }}
@@ -55,6 +94,7 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/.tmp"
           export TMPDIR="$GITHUB_WORKSPACE/.tmp"
           echo "Using TMPDIR=$TMPDIR"
+          echo "Using BROWSER_PROXY=$BROWSER_PROXY"
           python plugged-sb.py
 
       - name: Upload artifacts
