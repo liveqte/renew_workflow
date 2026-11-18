@@ -1,0 +1,69 @@
+name: plugged tokens daily
+
+on:
+  workflow_dispatch: # 允许在 Actions 页面手动触发此工作流，方便测试
+  schedule:
+    - cron: '43 0 * * *' # UTC 00:43（北京 08:43），面板为 UTC 时区，streak 午夜重置后尽快执行（避开 switched 的 00:23）
+
+# 避免定时任务与手动触发同时运行
+concurrency:
+  group: plugged-tokens
+  cancel-in-progress: false
+
+jobs:
+  earn_tokens:
+    runs-on: ubuntu-latest # 与 switched 同款出口（GitHub 托管 runner 直连）
+    timeout-minutes: 40
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout renew_tasks
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/renew_tasks
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install python package
+        run: |
+          python -m pip install --upgrade pip
+          pip install seleniumbase loguru pysocks
+
+      - name: Run plugged tokens script
+        env:
+          PYTHONIOENCODING: utf-8
+          PYTHONUNBUFFERED: '1'
+          # noprofit 账号（必填）
+          NOPROFIT_LOGIN: ${{ secrets.NOPROFIT_LOGIN }}
+          NOPROFIT_PASSWORD: ${{ secrets.NOPROFIT_PASSWORD }}
+          # 浏览器独立出口：不设该 secret 时浏览器直连（与 switched 同约定）
+          BROWSER_PROXY: ${{ secrets.PLUGGED_BROWSER_PROXY }}
+          # TG 通知复用 renew_workflow 已有的 TG_TOKEN / TG_USERID，也兼容同名 secret
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.TG_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || secrets.TG_USERID }}
+        run: |
+          if [ -z "$NOPROFIT_LOGIN" ] || [ -z "$NOPROFIT_PASSWORD" ]; then
+            echo "::error::缺少 NOPROFIT_LOGIN / NOPROFIT_PASSWORD secret（Settings → Secrets and variables → Actions）"
+            exit 1
+          fi
+          mkdir -p "$GITHUB_WORKSPACE/.tmp"
+          export TMPDIR="$GITHUB_WORKSPACE/.tmp"
+          echo "Using TMPDIR=$TMPDIR"
+          python plugged-sb.py
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugged-artifacts-${{ github.run_number }}
+          path: |
+            screenshots
+            plugged_cookie_latest.txt
+          retention-days: 7
+          if-no-files-found: ignore
