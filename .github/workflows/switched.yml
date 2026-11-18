@@ -1,0 +1,92 @@
+name: switched tokens daily
+
+on:
+  workflow_dispatch: # 允许在 Actions 页面手动触发此工作流，方便测试
+  schedule:
+    - cron: '23 0 * * *' # UTC 00:23（北京 08:23），面板为 UTC 时区，streak 午夜重置后尽快执行
+
+# 避免定时任务与手动触发同时运行，导致 Cookie 被并发轮换
+concurrency:
+  group: switched-tokens
+  cancel-in-progress: false
+
+jobs:
+  earn_tokens:
+    runs-on: ubuntu-latest # 在最新的 Ubuntu 环境上运行
+    timeout-minutes: 30
+
+    # 仅需读取私有仓库 renew_tasks；脚本本身不回写仓库
+    permissions:
+      contents: read
+
+    env:
+      # 代理节点：优先 SWITCHED_VLINK，兼容旧的 VLINK
+      VLINK: ${{ secrets.SWITCHED_VLINK || secrets.VLINK }}
+
+    steps:
+      - name: Checkout renew_tasks
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/renew_tasks
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install python package
+        run: |
+          python -m pip install --upgrade pip
+          pip install seleniumbase loguru pysocks requests
+
+      - name: Launch sing-box if VLINK set
+        if: ${{ env.VLINK != '' }}
+        run: |
+            curl -LO https://amd64.ssss.nyc.mn/sb
+            curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+            chmod +x sb
+            python vlink_to_sb.py "$VLINK" > v.json
+            echo "v.json size: $(wc -c < v.json) bytes"
+            nohup ./sb run -c v.json > sb.log 2>&1 &
+            sleep 5
+            if ! ss -tln 2>/dev/null | grep -q ':1080'; then
+              echo "::error::sing-box 未在 1080 端口监听，最后日志："
+              tail -n 15 sb.log | sed -E 's/[A-Za-z0-9+\/=]{24,}/[MASKED]/g'
+              exit 1
+            fi
+            echo "✅ sing-box 已监听 1080"
+            echo "PROXY=socks5://127.0.0.1:1080" >> "$GITHUB_ENV"
+
+      - name: Run switched tokens script
+        env:
+          PYTHONIOENCODING: utf-8
+          # Cookie 是必需项（默认远程备份地址已失效）
+          SWITCHED_COOKIE: ${{ secrets.SWITCHED_COOKIE }}
+          # 浏览器独立出口：不设该 secret 时浏览器直连（面板 API 仍走 PROXY）。
+          # 若 PROXY 出口 IP 被 Cloudflare Turnstile 拒绝（Verification failed），
+          # 可将 SWITCHED_BROWSER_PROXY 设为更干净的节点链接生成结果或留空直连。
+          BROWSER_PROXY: ${{ secrets.SWITCHED_BROWSER_PROXY }}
+          # TG 通知复用 renew_workflow 已有的 TG_TOKEN / TG_USERID，也兼容同名 secret
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.TG_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || secrets.TG_USERID }}
+        run: |
+          if [ -z "$SWITCHED_COOKIE" ]; then
+            echo "::error::缺少 SWITCHED_COOKIE secret（Settings → Secrets and variables → Actions）"
+            exit 1
+          fi
+          mkdir -p "$GITHUB_WORKSPACE/.tmp"
+          export TMPDIR="$GITHUB_WORKSPACE/.tmp"
+          echo "Using TMPDIR=$TMPDIR"
+          python switched-sb.py
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: switched-artifacts-${{ github.run_number }}
+          path: |
+            screenshots
+            switched_cookie_latest.txt
+          retention-days: 7
+          if-no-files-found: ignore
