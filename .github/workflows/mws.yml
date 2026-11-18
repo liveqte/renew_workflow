@@ -15,7 +15,7 @@ concurrency:
 jobs:
   renew:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - name: Checkout renew_tasks
         uses: actions/checkout@v6
@@ -30,8 +30,11 @@ jobs:
 
       - name: Install requirements
         run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb x11-utils xdotool scrot fonts-noto-cjk
+          # 只装运行必需项：fonts-noto-cjk 有 61MB，runner 到 apt 镜像经常只有
+          # 几十 KB/s，会直接把 20 分钟的 job 拖超时（2026-11-18 实测 17 分钟没下完）。
+          sudo apt-get install -y --no-install-recommends \
+            -o Acquire::Retries=3 \
+            xvfb x11-utils xdotool
           # pysocks：requests 走 socks5:// 代理必需
           python -m pip install 'requests>=2.31.0,<3' pysocks seleniumbase
           seleniumbase install chromedriver
