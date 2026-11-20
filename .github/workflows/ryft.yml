@@ -1,7 +1,12 @@
 name: Ryft auto login
 
 on:
-  workflow_dispatch: # 允许在 Actions 页面手动触发
+  workflow_dispatch: # 允许在 Actions 页面手动触发；勾选 debug 才上传运行信息
+    inputs:
+      debug:
+        description: '调试模式：上传运行信息工件并输出完整诊断'
+        type: boolean
+        default: false
   schedule:
     # 每 10 天登录一次（Ryft 免费服务器 10 天周期）；用每月 1/11/21 日近似，
     # 月底间隔会缩短到 8~11 天。UTC 03:37 = 北京时间 11:37，错峰避开整点调度拥堵。
@@ -19,6 +24,9 @@ jobs:
     permissions:
       actions: write # 清理旧的工作流运行记录
       contents: read
+
+    env:
+      TASK_DEBUG: ${{ inputs.debug == true && '1' || '0' }}
 
     steps:
       - name: Checkout renew_tasks
@@ -87,7 +95,7 @@ jobs:
           xvfb-run --auto-servernum python -u ryft-sb.py
 
       - name: 📸 上传登录截图
-        if: always()
+        if: always() && env.TASK_DEBUG == '1'
         uses: actions/upload-artifact@v4
         with:
           name: ryft-screenshots-${{ github.run_number }}

@@ -2,6 +2,11 @@ name: Aclclouds-Renew
 
 on:
   workflow_dispatch:
+    inputs:
+      debug:
+        description: '调试模式：上传运行信息工件并输出完整诊断'
+        type: boolean
+        default: false
 
 jobs:
   run_renewal:
@@ -9,6 +14,10 @@ jobs:
     permissions:
       contents: write
       actions: write
+
+    env:
+      TASK_DEBUG: ${{ inputs.debug == true && '1' || '0' }}
+
     steps:
       - uses: actions/checkout@v6
         with:
@@ -64,7 +73,7 @@ jobs:
             echo "✅ 代理连通正常（出口 IP 已隐藏，长度 ${#PROXY_IP} 字节）"
           else
             echo "❌ 代理连通性检查失败（出口节点可能已失效，见 sb.log）"
-            tail -20 sb.log || true
+            tail -20 sb.log 2>/dev/null | sed -E 's/[A-Za-z0-9+\/=]{24,}/[MASKED]/g' || true
             exit 1
           fi
 
@@ -83,7 +92,7 @@ jobs:
           xvfb-run -a python -u aclcloud-sb.py 2>&1 | tee run_output.log
 
       - name: Upload debug artifacts
-        if: always()
+        if: always() && env.TASK_DEBUG == '1'
         uses: actions/upload-artifact@v4
         with:
           name: debug-artifacts

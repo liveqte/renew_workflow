@@ -7,12 +7,16 @@ on:
       debug:
         description: '调试模式（保存失败页 HTML）'
         type: boolean
-        default: true
+        default: false
 jobs:
   renew:
     name: 🔄 执行续期
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    env:
+      TASK_DEBUG: ${{ inputs.debug == true && '1' || '0' }}
+
     steps:
       - name: 📥 拉取代码
         uses: actions/checkout@v4
@@ -62,7 +66,6 @@ jobs:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           TG_BOT:      ${{ secrets.TG_BOT }}
           GOST_PROXY:  http://127.0.0.1:1080
-          HN_DEBUG:    ${{ inputs.debug == true && '1' || '0' }}
         run: |
           if [ -z "$DISCORD_TOKEN" ]; then
             echo "::error::缺少 DISCORD_TOKEN secret（Settings → Secrets and variables → Actions）"
@@ -75,7 +78,7 @@ jobs:
           python hnhost-bs4.py
 
       - name: 🧩 上传调试 HTML 与日志
-        if: always()
+        if: always() && env.TASK_DEBUG == '1'
         uses: actions/upload-artifact@v4
         with:
           name: hnhost-debug-${{ github.run_number }}

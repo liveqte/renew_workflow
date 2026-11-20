@@ -1,7 +1,12 @@
 name: plugged tokens daily
 
 on:
-  workflow_dispatch: # 允许在 Actions 页面手动触发此工作流，方便测试
+  workflow_dispatch: # 允许在 Actions 页面手动触发此工作流，方便测试；勾选 debug 才上传运行信息
+    inputs:
+      debug:
+        description: '调试模式：上传运行信息工件并输出完整诊断'
+        type: boolean
+        default: false
   schedule:
     - cron: '43 0 * * *' # UTC 00:43（北京 08:43），面板为 UTC 时区，streak 午夜重置后尽快执行（避开 switched 的 00:23）
 
@@ -17,6 +22,9 @@ jobs:
 
     permissions:
       contents: read
+
+    env:
+      TASK_DEBUG: ${{ inputs.debug == true && '1' || '0' }}
 
     steps:
       - name: Checkout renew_tasks
@@ -98,7 +106,7 @@ jobs:
           python plugged-sb.py
 
       - name: Upload artifacts
-        if: always()
+        if: always() && env.TASK_DEBUG == '1'
         uses: actions/upload-artifact@v4
         with:
           name: plugged-artifacts-${{ github.run_number }}
