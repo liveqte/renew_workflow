@@ -1,0 +1,106 @@
+name: Luneshost keep 2
+
+on:
+  workflow_dispatch: # 允许在 Actions 页面手动触发此工作流，方便测试
+  schedule:
+    # 比 lunes.yml（26 2 * * 1）晚 20 分钟，错峰避免同时开跑
+    - cron: '46 2 * * 1'
+
+# 避免定时任务与手动触发同时运行；与 lunes.yml 用不同 group，互不阻塞
+concurrency:
+  group: lunes-keep-2
+  cancel-in-progress: false
+
+jobs:
+  add_time:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout renew_tasks
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/renew_tasks
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install requirements
+        run: |
+          # SB(xvfb=True) 需要 Xvfb；镜像自带就不装，避免新镜像 apt 源慢拖时间
+          if ! command -v Xvfb >/dev/null 2>&1; then
+            sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 xvfb x11-utils || true
+          fi
+          if command -v Xvfb >/dev/null 2>&1; then
+            echo "✅ Xvfb: $(command -v Xvfb)"
+          else
+            echo "::warning::未找到 Xvfb，SB(xvfb=True) 可能启动失败"
+          fi
+          # seleniumbase 会连带安装 requests / pysocks（socks5 代理需要）
+          python -m pip install --upgrade seleniumbase
+
+      - name: Check proxy link
+        id: proxy
+        env:
+          # 优先专用节点；没有则依次回落 lunes 主账号节点、switched 节点
+          VLINK: ${{ secrets.LUNE_VLINK_2 || secrets.LUNE_VLINK || secrets.SWITCHED_VLINK }}
+        run: |
+          if [ -n "$VLINK" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Launch sing-box if VLINK set
+        if: ${{ steps.proxy.outputs.enabled == 'true' }}
+        env:
+          VLINK: ${{ secrets.LUNE_VLINK_2 || secrets.LUNE_VLINK || secrets.SWITCHED_VLINK }}
+        run: |
+            curl -LO https://amd64.ssss.nyc.mn/sb
+            curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+            chmod +x sb
+            python vlink_to_sb.py "$VLINK" > v.json
+            echo "v.json size: $(wc -c < v.json) bytes"
+            nohup ./sb run -c v.json > sb.log 2>&1 &
+            sleep 5
+            if ! ss -tln 2>/dev/null | grep -q ':1080'; then
+              echo "::error::sing-box 未在 1080 端口监听，最后日志："
+              tail -n 15 sb.log | sed -E 's/[A-Za-z0-9+\/=]{24,}/[MASKED]/g'
+              exit 1
+            fi
+            echo "✅ sing-box 已监听 1080"
+            echo "PROXY=socks5://127.0.0.1:1080" >> "$GITHUB_ENV"
+
+      - name: Run Time Adder Script
+        env:
+          # 脚本只认 LUNE_USER / LUNE_PASS，这里注入第二个账号的 secret
+          LUNE_USER: ${{ secrets.LUNE_USER_2 }}
+          LUNE_PASS: ${{ secrets.LUNE_PASS_2 }}
+          PYTHONIOENCODING: utf-8
+          PYTHONUNBUFFERED: '1'
+        run: |
+          if [ -z "$LUNE_USER" ] || [ -z "$LUNE_PASS" ]; then
+            echo "::error::缺少 LUNE_USER_2 / LUNE_PASS_2 secret（Settings → Secrets and variables → Actions）"
+            exit 1
+          fi
+          mkdir -p "$GITHUB_WORKSPACE/.tmp"
+          export TMPDIR="$GITHUB_WORKSPACE/.tmp"
+          echo "Using TMPDIR=$TMPDIR"
+          export DISPLAY=:1
+          echo "Using DISPLAY=$DISPLAY"
+          python luneskeep-sb.py
+
+      - name: Upload error artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lunes2-screenshots-${{ github.run_number }}
+          path: screenshots
+          retention-days: 7
+          if-no-files-found: ignore
