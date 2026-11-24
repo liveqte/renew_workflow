@@ -38,7 +38,11 @@ jobs:
           fi
 
           # katabump.py 在续期成功后会把本次运行开始时间写入仓库变量。
-          LAST=$(gh api "repos/$REPO/actions/variables/KATABUMP_LAST_RENEW" --jq '.value' 2>/dev/null || true)
+          # gh api 在变量不存在时会把 404 JSON 打到 stdout，必须按退出码清空。
+          LAST=""
+          if ! LAST=$(gh api "repos/$REPO/actions/variables/KATABUMP_LAST_RENEW" --jq '.value' 2>/dev/null); then
+            LAST=""
+          fi
           if [ -z "$LAST" ]; then
             echo "No last-renewal record found; running."
             echo "should_skip=false" >> "$GITHUB_OUTPUT"
