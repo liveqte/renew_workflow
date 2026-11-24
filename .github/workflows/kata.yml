@@ -1,81 +1,131 @@
 name: Auto Renew Katabump
 
-on:  
+on:
   schedule:
-    - cron: '22 1 * * *'  # 每天运行一次（UTC时间 03:17）
-  workflow_dispatch:  # 允许手动触发
+    # 每天触发一次；真正的续期间隔由 pre-check 根据上次成功续期时间判断。
+    # GitHub 的 schedule 通常会延迟 6-8 小时，因此这里用 00:17 UTC，避免跨天。
+    - cron: '17 0 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: '强制运行续期（忽略 3 天间隔）'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
-   pre-check:
+  pre-check:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     outputs:
-      should_skip: ${{ steps.check.outputs.should_skip }} 
+      should_skip: ${{ steps.check.outputs.should_skip }}
     steps:
-      - name: Interval Check (Strict 4-day cycle)
+      - name: Check 3-day interval (based on last successful renewal)
         id: check
-        run: |        
-          # 计算当前 Unix 天数 (UTC)
-          DAYS=$(( $(date -u +%s) / 86400 ))
-          REMAINDER=$(( $DAYS % 4 ))
-          
-          if [ $REMAINDER -ne 0 ]; then
-            echo "should_skip=true" >> $GITHUB_OUTPUT
-          else
-            echo "should_skip=false" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          REPO: ${{ github.repository }}
+          FORCE: ${{ github.event.inputs.force || 'false' }}
+        run: |
+          set -euo pipefail
+
+          if [ "$FORCE" = "true" ]; then
+            echo "Force run requested."
+            echo "should_skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-   auto_renew_katabump:
+
+          # katabump.py 在续期成功后会把本次运行开始时间写入仓库变量。
+          LAST=$(gh api "repos/$REPO/actions/variables/KATABUMP_LAST_RENEW" --jq '.value' 2>/dev/null || true)
+          if [ -z "$LAST" ]; then
+            echo "No last-renewal record found; running."
+            echo "should_skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! LAST_TS=$(date -u -d "$LAST" +%s 2>/dev/null); then
+            echo "Invalid last-renewal timestamp '$LAST'; running."
+            echo "should_skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          NOW_TS=$(date -u +%s)
+          ELAPSED=$((NOW_TS - LAST_TS))
+          echo "Last successful renewal: $LAST (${ELAPSED}s ago)"
+
+          # 免费服务器每 4 天续期，到期前 2 天内可续期。
+          # 阈值用 60 小时而不是严格的 72 小时：
+          # 每天 cron 的实际启动时间会漂移，若用 72 小时，第 3 天的运行可能因差几分钟
+          # 被跳过，拖到第 4 天（临近到期）才执行。60 小时可保证第 2 天跳过、第 3 天必跑。
+          if [ "$ELAPSED" -ge 216000 ]; then
+            echo "3-day interval reached; running."
+            echo "should_skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "3-day interval not reached; skipping."
+            echo "should_skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  auto_renew_katabump:
     needs: pre-check
     if: needs.pre-check.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: write    
+      actions: write
     steps:
       - uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/renew_tasks
           token: ${{ secrets.GH_TOKEN }}
-          
+
       - name: ⚙ 设置 Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      
+
       - name: 🛠️ 安装系统依赖和python依赖
         run: |
           sudo apt-get update
           sudo apt-get install -y xvfb x11-utils xdotool scrot fonts-noto-cjk
           pip install seleniumbase requests
           seleniumbase install chromedriver
-          
+
       - name: Launch sing-box if VLINK set
         env:
           VLINK: ${{ secrets.KATA_LINK }}
         if: ${{ env.VLINK != '' }}
         run: |
-            curl -LO https://amd64.ssss.nyc.mn/sb
-            curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
-            chmod +x sb
-            python vlink_to_sb.py $VLINK > v.json
-            nohup ./sb run -c v.json > /dev/null 2>&1 &
-            sleep 3
-            
-      # - name: ⚙ 设置代理 (sing-box)
-      #   continue-on-error: true
-      #   env:
-      #     NODE_LINK: ${{ secrets.KATA_LINK }}
-      #   run: |
-      #     bash <(wget -qO- https://main.ssss.nyc.mn/setup_proxy.sh)
-      
-  
+          curl -LO https://amd64.ssss.nyc.mn/sb
+          curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+          chmod +x sb
+          python vlink_to_sb.py $VLINK > v.json
+          nohup ./sb run -c v.json > /dev/null 2>&1 &
+          sleep 3
+
       - name: 🚀 运行续期脚本
         env:
           KATABUMP_EMAIL: ${{ secrets.KATABUMP_EMAIL }}
           KATABUMP_PASSWORD: ${{ secrets.KATABUMP_PASSWORD }}
           TG_BOT_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_USERID }}
-          PROXY_SERVER : socks5://127.0.0.1:1080
-          IS_PROXY : true
+          PROXY_SERVER: socks5://127.0.0.1:1080
+          IS_PROXY: true
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
+          mkdir -p artifacts
           xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
             python3 katabump.py
+
+      - name: 📸 上传调试产物
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kata-debug-${{ github.run_number }}
+          path: |
+            artifacts/
+            *.png
+          if-no-files-found: ignore
+          retention-days: 7
