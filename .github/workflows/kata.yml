@@ -2,9 +2,11 @@ name: Auto Renew Katabump
 
 on:
   schedule:
-    # 每天触发一次；真正的续期间隔由 pre-check 根据上次成功续期时间判断。
-    # GitHub 的 schedule 通常会延迟 6-8 小时，因此这里用 00:17 UTC，避免跨天。
+    # 每天触发两次；真正的续期间隔由 pre-check 根据上次成功续期时间判断。
+    # 两次是为了覆盖续期窗口在当天较晚才开放、或首次运行失败的情况。
+    # GitHub 的 schedule 通常会延迟数小时，00:17 / 12:17 可避开整点高峰。
     - cron: '17 0 * * *'
+    - cron: '17 12 * * *'
   workflow_dispatch:
     inputs:
       force:
