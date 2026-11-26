@@ -1,0 +1,95 @@
+name: Eternodes server renew and power
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: '调试模式：输出完整服务器标识和受限诊断'
+        type: boolean
+        default: false
+      dry_run:
+        description: '只读检查：列出可续期服务器，不发送续期或开机请求'
+        type: boolean
+        default: true
+
+concurrency:
+  group: eternodes-renew
+  cancel-in-progress: false
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    env:
+      TASK_DEBUG: ${{ inputs.debug == true && '1' || '0' }}
+      DRY_RUN: ${{ inputs.dry_run == true && '1' || '0' }}
+
+    steps:
+      - name: Checkout renew_tasks
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/renew_tasks
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests PySocks
+
+      - name: Check proxy link
+        id: proxy
+        env:
+          VLINK: ${{ secrets.ETERNODES_VLINK }}
+        run: |
+          if [ -n "$VLINK" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Launch sing-box if ETERNODES_VLINK set
+        if: ${{ steps.proxy.outputs.enabled == 'true' }}
+        env:
+          VLINK: ${{ secrets.ETERNODES_VLINK }}
+        run: |
+          curl -LO https://amd64.ssss.nyc.mn/sb
+          curl -LO https://raw.githubusercontent.com/liveqte/jupyter-notebook-deployed/refs/heads/main/vlink_to_sb.py
+          chmod +x sb
+          python vlink_to_sb.py "$VLINK" > v.json
+          nohup ./sb run -c v.json > sb.log 2>&1 &
+          sleep 5
+          if ! ss -tln 2>/dev/null | grep -q ':1080'; then
+            echo "::error::sing-box 未在 1080 端口监听，最后日志："
+            tail -n 15 sb.log | sed -E 's/[A-Za-z0-9+\/=]{24,}/[MASKED]/g'
+            exit 1
+          fi
+          echo "PROXY=socks5://127.0.0.1:1080" >> "$GITHUB_ENV"
+
+      - name: Run Eternodes renew and power
+        env:
+          ETERNODES_COOKIE: ${{ secrets.ETERNODES_COOKIE }}
+          TG_BOT: ${{ secrets.TG_BOT }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.TG_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || secrets.TG_USERID }}
+          PYTHONIOENCODING: utf-8
+          PYTHONUNBUFFERED: '1'
+        run: |
+          if [ -z "$ETERNODES_COOKIE" ]; then
+            echo "::error::缺少 ETERNODES_COOKIE secret（Settings -> Secrets and variables -> Actions）"
+            exit 1
+          fi
+          mkdir -p "$GITHUB_WORKSPACE/.tmp"
+          export TMPDIR="$GITHUB_WORKSPACE/.tmp"
+          if [ "$DRY_RUN" = "1" ]; then
+            python eternodes.py --dry-run
+          else
+            python eternodes.py
+          fi
